@@ -1,0 +1,74 @@
+{
+  "ingestion": {
+    "db_engine": "sqlite",
+    "history_years": 5,
+    "start_year": 2021,
+    "end_year": 2026,
+    "download_chunk_days": 30,
+    "retry_attempts": 5,
+    "rate_limit_delay_seconds": 2.0,
+    "discovery": {
+      "country": "IN",
+      "minimum_years": 1,
+      "minimum_completeness": 0.80,
+      "required_pollutants": ["pm25", "no2"],
+      "maximum_missing": 0.25
+    },
+    "openaq_historical_stations": {
+      "Whitefield": 8180,
+      "Koramangala": 8161,
+      "Indiranagar": 8180,
+      "Electronic City": 8161,
+      "Peenya Industrial Area": 8180
+    },
+    "openaq_v3_realtime_locations": {
+      "East Delhi": 235,
+      "Dwarka": 5622,
+      "Connaught Place": 5613,
+      "Okhla Industrial Area": 5586,
+      "Rohini": 5610,
+      "Whitefield": 3409312,
+      "Koramangala": 5548,
+      "Indiranagar": 5574,
+      "Electronic City": 6973,
+      "Peenya Industrial Area": 5644
+    }
+  },
+  "training": {
+    "seq_len": 48,
+    "learning_rate": 0.00005,
+    "batch_size": 256,
+    "epochs": 300,
+    "patience": 40,
+    "grad_clip": 1.0,
+    "hidden_dim": 128,
+    "num_lstm_layers": 1,
+    "dropout": 0.3,
+    "weight_decay": 1e-4,
+    "warmup_epochs": 0,
+    "huber_delta": 1.0,
+    "k_neighbours": 3,
+    "random_seed": 42
+  },
+  "station_selection": {
+    "target_station_count": 40,
+    "max_per_city": 5,
+    "minimum_quality_score": 75,
+    "minimum_history_years": 5,
+    "required_pollutants": ["pm25", "no2"],
+    "selection_strategy": "stratified",
+    "max_per_city_limits": {
+      "Delhi": 5,
+      "Mumbai": 3,
+      "Bengaluru": 3,
+      "Hyderabad": 3,
+      "Chennai": 3,
+      "Kolkata": 3,
+      "Ahmedabad": 3,
+      "Lucknow": 3,
+      "Pune": 2,
+      "Guwahati": 2,
+      "Mangalore": 1
+    }
+  }
+}

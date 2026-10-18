@@ -1,0 +1,179 @@
+import os
+from datetime import datetime
+from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime, ForeignKey, Text, event, UniqueConstraint
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+
+db_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+DATABASE_URL = f"sqlite:///{os.path.join(db_dir, 'geobreathe.db')}"
+
+# SQLite connection: disable thread checking for FastAPI async workers and allow up to 30s lock wait
+engine = create_engine(
+    DATABASE_URL, 
+    connect_args={"check_same_thread": False, "timeout": 30}
+)
+
+# Enable WAL (Write-Ahead Logging) so concurrent telemetry ingestion won't block read queries
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")  # safe balance of durability and write throughput
+    cursor.close()
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class City(Base):
+    __tablename__ = "cities"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    ncap_target = Column(Float)  # Target reduction % (e.g. 40.0)
+    wards = relationship("Ward", back_populates="city")
+
+class Ward(Base):
+    __tablename__ = "wards"
+    id = Column(Integer, primary_key=True, index=True)
+    city_id = Column(Integer, ForeignKey("cities.id"))
+    name = Column(String, index=True)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    population = Column(Integer)
+    boundary_geojson = Column(Text)  # GeoJSON string for mapping
+    city = relationship("City", back_populates="wards")
+    readings = relationship("Reading", back_populates="ward")
+    forecasts = relationship("Forecast", back_populates="ward")
+    attributions = relationship("Attribution", back_populates="ward")
+    enforcements = relationship("EnforcementTarget", back_populates="ward")
+    advisories = relationship("Advisory", back_populates="ward")
+
+class Reading(Base):
+    __tablename__ = "readings"
+    id = Column(Integer, primary_key=True, index=True)
+    ward_id = Column(Integer, ForeignKey("wards.id"))
+    timestamp = Column(DateTime, index=True, default=datetime.utcnow)
+    pm25 = Column(Float)
+    pm10 = Column(Float)
+    no2 = Column(Float)
+    so2 = Column(Float)
+    o3 = Column(Float)
+    co = Column(Float)
+    temp = Column(Float)
+    humidity = Column(Float)
+    wind_speed = Column(Float)
+    wind_deg = Column(Float)
+    stagnation = Column(Float)
+    
+    ward = relationship("Ward", back_populates="readings")
+
+class Forecast(Base):
+    __tablename__ = "forecasts"
+    id = Column(Integer, primary_key=True, index=True)
+    ward_id = Column(Integer, ForeignKey("wards.id"))
+    timestamp = Column(DateTime, index=True)  # Forecast generation time
+    forecast_time = Column(DateTime, index=True)  # Predicted time
+    predicted_pm25 = Column(Float)
+    predicted_no2 = Column(Float)
+    predicted_aqi = Column(Float)
+    
+    ward = relationship("Ward", back_populates="forecasts")
+
+class Attribution(Base):
+    __tablename__ = "attributions"
+    id = Column(Integer, primary_key=True, index=True)
+    ward_id = Column(Integer, ForeignKey("wards.id"))
+    timestamp = Column(DateTime, index=True, default=datetime.utcnow)
+    vehicular_pct = Column(Float)
+    industrial_pct = Column(Float)
+    biomass_pct = Column(Float)
+    waste_burning_pct = Column(Float)
+    dust_pct = Column(Float)
+    confidence = Column(Float)
+    
+    ward = relationship("Ward", back_populates="attributions")
+
+class EnforcementTarget(Base):
+    __tablename__ = "enforcement_targets"
+    id = Column(Integer, primary_key=True, index=True)
+    ward_id = Column(Integer, ForeignKey("wards.id"))
+    name = Column(String)
+    type = Column(String)  # Industrial, Traffic Corridor, Waste Burning, Construction
+    latitude = Column(Float)
+    longitude = Column(Float)
+    risk_score = Column(Float)
+    evidence_packet = Column(Text)  # JSON details (stagnation, PM levels)
+    status = Column(String, default="Pending")  # Pending, Inspected, Resolved
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    ward = relationship("Ward", back_populates="enforcements")
+
+class Advisory(Base):
+    __tablename__ = "advisories"
+    id = Column(Integer, primary_key=True, index=True)
+    ward_id = Column(Integer, ForeignKey("wards.id"))
+    timestamp = Column(DateTime, index=True, default=datetime.utcnow)
+    level = Column(String)  # Good, Moderate, Poor, Severe
+    message_en = Column(Text)
+    message_hi = Column(Text)
+    message_local = Column(Text)
+    
+    ward = relationship("Ward", back_populates="advisories")
+
+class Station(Base):
+    __tablename__ = "stations"
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, index=True)
+    city = Column(String, index=True)
+    state = Column(String)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    elevation = Column(Float)
+    station_type = Column(String)
+    installation_date = Column(DateTime, nullable=True)
+    available_pollutants = Column(String)  # Comma-separated
+    quality_score = Column(Float, default=0.0)
+    
+    readings = relationship("StationReading", back_populates="station", cascade="all, delete-orphan")
+
+class StationReading(Base):
+    __tablename__ = "station_readings"
+    __table_args__ = (UniqueConstraint('station_id', 'timestamp', name='_station_timestamp_uc'),)
+    id = Column(Integer, primary_key=True, index=True)
+    station_id = Column(String, ForeignKey("stations.id"), index=True)
+    timestamp = Column(DateTime, index=True)
+    pm25 = Column(Float, nullable=True)
+    pm10 = Column(Float, nullable=True)
+    no2 = Column(Float, nullable=True)
+    so2 = Column(Float, nullable=True)
+    o3 = Column(Float, nullable=True)
+    co = Column(Float, nullable=True)
+    temp = Column(Float, nullable=True)
+    humidity = Column(Float, nullable=True)
+    surface_pressure = Column(Float, nullable=True)
+    wind_speed = Column(Float, nullable=True)
+    wind_deg = Column(Float, nullable=True)
+    wind_u = Column(Float, nullable=True)
+    wind_v = Column(Float, nullable=True)
+    precipitation = Column(Float, nullable=True)
+    pbl_height = Column(Float, nullable=True)
+    solar_radiation = Column(Float, nullable=True)
+    cloud_cover = Column(Float, nullable=True)
+    dew_point = Column(Float, nullable=True)
+    visibility = Column(Float, nullable=True)
+    upwind_fire_intensity = Column(Float, default=0.0)
+    upwind_fire_count = Column(Integer, default=0)
+    stagnation = Column(Float, default=0.0)
+    
+    station = relationship("Station", back_populates="readings")
+
+def init_db():
+    Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
