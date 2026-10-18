@@ -1,11 +1,8 @@
 # 💨 AtmosEdgeAI
 
 ### Predictive Urban Air Quality Intelligence & Automated Municipal Intervention Platform
+> **Team Name:** Team Poddar Associates 
 
-> **Technical Engineering Project Submission | Problem Statement 5 (PS 5): AI-Powered Urban Air Quality Intelligence for Smart City Intervention**  
-> **Team Name:** Team Coke  
-> **GitHub Repository:** [princexpoddar/AtmosEdgeAI](https://github.com/princexpoddar/AtmosEdgeAI)  
-> **PDF Deliverable:** [PROJECT_SUBMISSION_DOCUMENT.pdf](./PROJECT_SUBMISSION_DOCUMENT.pdf)
 
 ---
 
