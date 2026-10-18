@@ -162,9 +162,30 @@ app.add_middleware(
 app.include_router(router, prefix="/api")
 
 
-@app.get("/", tags=["Health"])
-def read_root():
-    return {"message": "AtmosEdgeAI API v2.1. Visit /docs for documentation."}
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# Check if production frontend build exists; if so, serve the SPA directly for seamless presentation
+_frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+if (_frontend_dist / "index.html").exists():
+    if (_frontend_dist / "assets").exists():
+        app.mount("/assets", StaticFiles(directory=_frontend_dist / "assets"), name="assets")
+
+    @app.get("/", include_in_schema=False)
+    async def serve_index():
+        return FileResponse(_frontend_dist / "index.html")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        target = _frontend_dist / full_path
+        if target.is_file():
+            return FileResponse(target)
+        # Fallback to index.html for client-side routing (React Router)
+        return FileResponse(_frontend_dist / "index.html")
+else:
+    @app.get("/", tags=["Health"])
+    def read_root():
+        return {"message": "AtmosEdgeAI API v2.1. Visit /docs for documentation."}
 
 
 @app.get("/api/health", tags=["Health"])
